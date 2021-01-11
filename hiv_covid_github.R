@@ -1,6 +1,6 @@
 #################
 # HIV/COVID-19 spatial maps
-# Citation: Welles SL, Goldstein ND. An ecological exploration of the cooccurrence of HIV and COVID-19 infection in Philadelphia, Pennsylvania. Manuscript in preparation.
+# Citation: Welles SL, Goldstein ND. An ecological exploration of the co-occurrence of HIV and COVID-19 infection in Philadelphia, Pennsylvania using a ratio-based measure. Manuscript in preparation.
 # 7/29/20 -- Neal Goldstein
 #################
 
@@ -120,8 +120,11 @@ load("philly_spatial.RData")
 #create a COVID per capita
 philly_data$COVID = philly_data$Positive_tests / philly_data$Population * 100000
 
-#create a per 100k ratio
+#create a ratio
 philly_data$Ratio = philly_data$COVID / philly_data$HIV
+
+#create a Z-scored ratio
+philly_data$Ratio_z = scale(philly_data$Ratio)
 
 #exclude suppressed data areas
 philly_data = philly_data[philly_data$ZCTA!="19109" & philly_data$ZCTA!="19113", ]
@@ -135,6 +138,7 @@ philly_data$Center_city = ifelse(philly_data$ZCTA=="19102" | philly_data$ZCTA=="
 describe(philly_data$COVID)
 describe(philly_data$HIV)
 describe(philly_data$Ratio)
+describe(philly_data$Ratio_z)
 
 #center city has fewer cases of COVID, more cases of HIV
 describeBy(philly_data$COVID, philly_data$Center_city)
@@ -143,8 +147,8 @@ wilcox.test(philly_data$COVID ~ philly_data$Center_city)
 describeBy(philly_data$HIV, philly_data$Center_city)
 wilcox.test(philly_data$HIV ~ philly_data$Center_city)
 
-describeBy(philly_data$Ratio, philly_data$Center_city)
-wilcox.test(philly_data$Ratio ~ philly_data$Center_city)
+describeBy(philly_data$Ratio_z, philly_data$Center_city)
+wilcox.test(philly_data$Ratio_z ~ philly_data$Center_city)
 
 #center city less deprivation, greater population density, greater household income, less "high risk" occupations
 describeBy(philly_data$census_NDI, philly_data$Center_city)
@@ -173,13 +177,16 @@ philly_sf_joined$Density = philly_sf_joined$Population / area(philly_sf)
 
 #choropleth shading for ratio
 choropleth_col = rep("#FFFFFF",nrow(philly_sf_joined))
-choropleth_col[which(philly_sf_joined$Ratio<=1)] = rev(brewer.pal(4, "Reds"))[na.omit(as.numeric(cut(philly_sf_joined$Ratio[philly_sf_joined$Ratio<=1], breaks=c(quantile(philly_sf_joined$Ratio[philly_sf_joined$Ratio<=1], probs = seq(0, 1, by = 0.25), na.rm=T)), include.lowest=TRUE)))]
-choropleth_col[which(philly_sf_joined$Ratio>1)] = brewer.pal(4, "Blues")[na.omit(as.numeric(cut(philly_sf_joined$Ratio[philly_sf_joined$Ratio>1], breaks=c(quantile(philly_sf_joined$Ratio[philly_sf_joined$Ratio>1], probs = seq(0, 1, by = 0.25), na.rm=T)), include.lowest=TRUE)))]
+#choropleth_col[which(philly_sf_joined$Ratio<=1)] = rev(brewer.pal(4, "Reds"))[na.omit(as.numeric(cut(philly_sf_joined$Ratio[philly_sf_joined$Ratio<=1], breaks=c(quantile(philly_sf_joined$Ratio[philly_sf_joined$Ratio<=1], probs = seq(0, 1, by = 0.25), na.rm=T)), include.lowest=TRUE)))]
+#choropleth_col[which(philly_sf_joined$Ratio>1)] = brewer.pal(4, "Blues")[na.omit(as.numeric(cut(philly_sf_joined$Ratio[philly_sf_joined$Ratio>1], breaks=c(quantile(philly_sf_joined$Ratio[philly_sf_joined$Ratio>1], probs = seq(0, 1, by = 0.25), na.rm=T)), include.lowest=TRUE)))]
+choropleth_col[which(philly_sf_joined$Ratio_z<=0)] = rev(brewer.pal(4, "Reds"))[na.omit(as.numeric(cut(philly_sf_joined$Ratio_z[philly_sf_joined$Ratio_z<=0], breaks=c(quantile(philly_sf_joined$Ratio_z[philly_sf_joined$Ratio_z<=0], probs = seq(0, 1, by = 0.25), na.rm=T)), include.lowest=TRUE)))]
+choropleth_col[which(philly_sf_joined$Ratio_z>0)] = brewer.pal(4, "Blues")[na.omit(as.numeric(cut(philly_sf_joined$Ratio_z[philly_sf_joined$Ratio_z>0], breaks=c(quantile(philly_sf_joined$Ratio_z[philly_sf_joined$Ratio_z>0], probs = seq(0, 1, by = 0.25), na.rm=T)), include.lowest=TRUE)))]
 
 #draw choropleth ratio map: export as 1200 width
 par(mar=rep(0.1,4))
 plot(philly_sf_joined$geometry,col=choropleth_col, border="darkgray", main="\nA)", cex.main=2)
-text(t(sapply(slot(as_Spatial(philly_sf_joined), "polygons"), function(i) slot(i, "labpt"))), cex=0.6, labels=round(philly_sf_joined$Ratio,2))
+#text(t(sapply(slot(as_Spatial(philly_sf_joined), "polygons"), function(i) slot(i, "labpt"))), cex=0.6, labels=round(philly_sf_joined$Ratio,2))
+text(t(sapply(slot(as_Spatial(philly_sf_joined), "polygons"), function(i) slot(i, "labpt"))), cex=0.6, labels=round(philly_sf_joined$Ratio_z,2))
 
 #add center city demarcation
 cc = subset(philly_sf_joined,Center_city==1 | ZCTA5CE10=="19109")
@@ -250,4 +257,3 @@ plot(cc, border="black", lwd=3, add=T)
 # 
 # #obtain estimates
 # summary(impacts(model_lag,tr=trW(as(wt_list, "CsparseMatrix"), type="mult"), R=1000), zstats=T)
-
