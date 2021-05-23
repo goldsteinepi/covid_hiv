@@ -1,6 +1,6 @@
 #################
 # HIV/COVID-19 spatial maps
-# Citation: Goldstein ND, Webster JL, Welles SL. An application of a difference-based measure to identify ecological disparities in the co-occurrence of COVID-19 and HIV infection in Philadelphia, Pennsylvania. Manuscript in preparation.
+# Citation: Goldstein ND, Webster JL, Robinson LF, Welles SL. Use of Neighborhood Infection Incidence to Identify Disparities of COVID-19 and HIV Occurrence in Philadelphia, Pennsylvania. Manuscript in preparation.
 # 7/29/20 -- Neal Goldstein
 #################
 
@@ -35,6 +35,7 @@ occupation = get_acs(geography="zcta", table="S2401", year=2018, output="wide")
 race = get_acs(geography="zcta", table="B02001", year=2018, output="wide")
 ethnicity = get_acs(geography="zcta", table="B03003", year=2018, output="wide")
 household = get_acs(geography="zcta", table="B11009", year=2018, output="wide")
+age = get_acs(geography="zcta", table="S0101", year=2018, output="wide")
 
 #census-based deprivation index: details provided here https://towardsdatascience.com/a-census-based-deprivation-index-using-r-7aa738da697c, https://www.ncbi.nlm.nih.gov/pubmed/17031568
 deprivation = get_acs(geography="zcta", variables=c("B17001_002", "B17001_001", "B06009_002" , "B06009_001","B09008_011","B09008_001","B08124_002", "B08124_001", "B25014_005","B25014_006",  "B25014_007","B25014_011", "B25014_012", "B25014_013","B25014_001", "B19058_002", "B19058_001","C23002C_021", "C23002D_008","C23002C_017", "C23002D_003","B19001_002", "B19001_003", "B19001_004","B19001_005", "B19001_006", "B19001_001"), output="wide", year=2018)
@@ -56,13 +57,22 @@ for (i in 1:nrow(covid_zip)) {
 }
 rm(i,z,zcta)
 
-philly_data = data.frame("Positive_tests"=NA, "Total_tests"=NA, "Negative_tests"=NA, "HIV"=NA, "Population"=NA, "Overdoses"=NA, "ZCTA"=unique(covid_zip$zcta), stringsAsFactors=F)
+#philly data (add 19112 that was suppressed in data pulls)
+philly_data = data.frame("Positive_tests"=NA, "Total_tests"=NA, "Negative_tests"=NA, "HIV"=NA, "Population"=NA, "Overdoses"=NA, "ZCTA"=c(unique(covid_zip$zcta),"19112"), stringsAsFactors=F)
 
 for (i in 1:nrow(philly_data)) {
-  philly_data$Positive_tests[i] = sum(covid_zip$count[covid_zip$zcta==philly_data$ZCTA[i] & covid_zip$covid_status=="POS"], na.rm=T)
-  philly_data$Negative_tests[i] = sum(covid_zip$count[covid_zip$zcta==philly_data$ZCTA[i] & covid_zip$covid_status=="NEG"], na.rm=T)
-  philly_data$HIV[i] = hiv_zip$hiv_per_100k[hiv_zip$zcta==philly_data$ZCTA[i]]
-  philly_data$Overdoses[i] = overdose_zip$deaths[overdose_zip$zcta==philly_data$ZCTA[i]]
+  if (sum(covid_zip$zcta==philly_data$ZCTA[i])>0) {
+    philly_data$Positive_tests[i] = sum(covid_zip$count[covid_zip$zcta==philly_data$ZCTA[i] & covid_zip$covid_status=="POS"], na.rm=T)
+    philly_data$Negative_tests[i] = sum(covid_zip$count[covid_zip$zcta==philly_data$ZCTA[i] & covid_zip$covid_status=="NEG"], na.rm=T)
+  }
+  
+  if (sum(hiv_zip$zcta==philly_data$ZCTA[i])>0) {
+    philly_data$HIV[i] = hiv_zip$hiv_per_100k[hiv_zip$zcta==philly_data$ZCTA[i]]
+  }
+  
+  if (sum(overdose_zip$zcta==philly_data$ZCTA[i])>0) {
+    philly_data$Overdoses[i] = overdose_zip$deaths[overdose_zip$zcta==philly_data$ZCTA[i]]
+  }
 }
 rm(i)
 
@@ -78,6 +88,16 @@ ethnicity$Hispanic = round(ethnicity$B03003_003E / ethnicity$B03003_001E * 100, 
 #male partenered household % (married and cohabiting)
 household$Male_partner_household = round(household$B11009_003E / household$B11009_001E * 100, 1)
 
+#overwrite GEOID with ZCTA
+population$GEOID = gsub("ZCTA5 ", "", population$NAME)
+income$GEOID = gsub("ZCTA5 ", "", income$NAME)
+occupation$GEOID = gsub("ZCTA5 ", "", occupation$NAME)
+race$GEOID = gsub("ZCTA5 ", "", race$NAME)
+ethnicity$GEOID = gsub("ZCTA5 ", "", ethnicity$NAME)
+household$GEOID = gsub("ZCTA5 ", "", household$NAME)
+age$GEOID = gsub("ZCTA5 ", "", age$NAME)
+deprivation$GEOID = gsub("ZCTA5 ", "", deprivation$NAME)
+
 #join population, household income to Philly zcta
 philly_data = merge(philly_data,population[,c("GEOID","B01003_001E")],by.x="ZCTA",by.y="GEOID")
 philly_data = merge(philly_data,income[,c("GEOID","B19013_001E")],by.x="ZCTA",by.y="GEOID")
@@ -85,16 +105,19 @@ philly_data = merge(philly_data,occupation[,c("GEOID","Occupation")],by.x="ZCTA"
 philly_data = merge(philly_data,race[,c("GEOID","Black")],by.x="ZCTA",by.y="GEOID")
 philly_data = merge(philly_data,ethnicity[,c("GEOID","Hispanic")],by.x="ZCTA",by.y="GEOID")
 philly_data = merge(philly_data,household[,c("GEOID","Male_partner_household")],by.x="ZCTA",by.y="GEOID")
+philly_data = merge(philly_data,age[,c("GEOID","S0101_C01_032E")],by.x="ZCTA",by.y="GEOID")
 
 #recode and clean
 philly_data$Total_tests = philly_data$Positive_tests + philly_data$Negative_tests
 philly_data$Population = philly_data$B01003_001E
 philly_data$Income = philly_data$B19013_001E
+philly_data$Age = philly_data$S0101_C01_032E
 philly_data$NAME = NULL
 philly_data$B01003_001E = NULL
 philly_data$B19013_001E = NULL
+philly_data$S0101_C01_032E = NULL
 
-rm(covid_zip, hiv_zip, population, income, occupation, race, household, overdose_zip)
+rm(covid_zip, hiv_zip, population, income, occupation, race, ethnicity, household, age, overdose_zip)
 
 #create deprivation index: https://towardsdatascience.com/a-census-based-deprivation-index-using-r-7aa738da697c, https://www.ncbi.nlm.nih.gov/pubmed/17031568
 deprivation$pct_poverty = deprivation$B17001_002E / deprivation$B17001_001E
@@ -165,7 +188,8 @@ philly_data$Diff_z = philly_data$COVID_z - philly_data$HIV_z
 philly_data$factor_Overdoses = as.numeric(factor(philly_data$Overdoses, order = TRUE, levels = c("0","1-6","7-24","25-49","50-99","100+")))
 
 #exclude suppressed data areas
-philly_data = philly_data[philly_data$ZCTA!="19109" & philly_data$ZCTA!="19113", ]
+philly_data$COVID_suppressed = ifelse(philly_data$ZCTA=="19109" | philly_data$ZCTA=="19112" | philly_data$ZCTA=="19113", 1, 0)
+philly_data$HIV_suppressed = ifelse(philly_data$ZCTA=="19109" | philly_data$ZCTA=="19112" | philly_data$ZCTA=="19113" | philly_data$ZCTA=="19118" | philly_data$ZCTA=="19127" | philly_data$ZCTA=="19137", 1, 0)
 
 #create a center city indicator: https://en.wikipedia.org/wiki/Center_City,_Philadelphia
 philly_data$Center_city = ifelse(philly_data$ZCTA=="19102" | philly_data$ZCTA=="19103" | philly_data$ZCTA=="19106" | philly_data$ZCTA=="19107" | philly_data$ZCTA=="19146" | philly_data$ZCTA=="19147", 1, 0)
@@ -173,16 +197,20 @@ philly_data$Center_city = ifelse(philly_data$ZCTA=="19102" | philly_data$ZCTA=="
 
 ### DESCRIPTIVES ###
 
-describe(philly_data$COVID)
-describe(philly_data$HIV)
+sum(philly_data$Population[philly_data$COVID_suppressed==0])
+describe(philly_data$Population[philly_data$COVID_suppressed==0])
+describe(philly_data$COVID[philly_data$COVID_suppressed==0])
+sum(philly_data$COVID[philly_data$COVID_suppressed==0])
+describe(philly_data$HIV[philly_data$HIV_suppressed==0])
+sum(philly_data$HIV[philly_data$HIV_suppressed==0])
 describe(philly_data$Diff_z)
 
 #center city has fewer cases of COVID, more cases of HIV
-describeBy(philly_data$COVID, philly_data$Center_city)
-wilcox.test(philly_data$COVID ~ philly_data$Center_city)
+describeBy(philly_data$COVID[philly_data$COVID_suppressed==0], philly_data$Center_city[philly_data$COVID_suppressed==0])
+wilcox.test(philly_data$COVID[philly_data$COVID_suppressed==0] ~ philly_data$Center_city[philly_data$COVID_suppressed==0])
 
-describeBy(philly_data$HIV, philly_data$Center_city)
-wilcox.test(philly_data$HIV ~ philly_data$Center_city)
+describeBy(philly_data$HIV[philly_data$HIV_suppressed==0], philly_data$Center_city[philly_data$HIV_suppressed==0])
+wilcox.test(philly_data$HIV[philly_data$HIV_suppressed==0] ~ philly_data$Center_city[philly_data$HIV_suppressed==0])
 
 describeBy(philly_data$Diff_z, philly_data$Center_city)
 wilcox.test(philly_data$Diff_z ~ philly_data$Center_city)
@@ -296,6 +324,21 @@ plot(philly_sf_joined$geometry,col=choropleth_col, border="#595959", lwd=0.7, ma
 #add center city demarcation
 plot(cc, border="black", lwd=2, add=T)
 
+## H) age
+# convert age to factor
+philly_sf_joined$factor_Age <- factor(ifelse(philly_sf_joined$Age < 25, "< 25",
+                                             ifelse(philly_sf_joined$Age < 30, "25-29",
+                                                    ifelse(philly_sf_joined$Age < 35, "30-34",
+                                                           ifelse(philly_sf_joined$Age < 40, "35-39", "40+")))))
+
+#choropleth shading
+choropleth_col = brewer.pal(8, "Greys")[as.numeric(philly_sf_joined$factor_Age)]
+#draw choropleth map
+par(mar=rep(0.1,4))
+plot(philly_sf_joined$geometry,col=choropleth_col, border="#595959", lwd=0.7, main="\nH)", cex.main=2)
+#add center city demarcation
+plot(cc, border="black", lwd=2, add=T)
+
 
 ### Z-SCORE MAPS ###
 
@@ -401,8 +444,14 @@ COVp5 <-  ggscatter(philly_sf_joined, x = "Hispanic", y = "COVID",
                     cor.coef = TRUE, cor.method = "spearman",
                     main= "Percent Hispanic or Latino", xlab = "%", ylab = "COVID-19 cases")
 
+# Age
+COVp6 <-  ggscatter(philly_sf_joined, x = "Age", y = "COVID",
+                    add = "reg.line", conf.int = TRUE,
+                    cor.coef = TRUE, cor.method = "pearson",
+                    main= "Median Age", xlab = "Years", ylab = "COVID-19 cases per 100,000")
+
 # COVID correlation plots combined
-COVpAll <- grid.arrange(COVp1, COVp2, COVp3, COVp4, COVp5, nrow = 1)
+COVpAll <- grid.arrange(COVp1, COVp2, COVp3, COVp4, COVp5, COVp6, nrow = 1)
 
 ## HIV ##
 # median household income, % male-partner household, overdose deaths, % Black, % Hispanic
@@ -437,8 +486,13 @@ HIVp5 <-   ggscatter(philly_sf_joined, x = "Hispanic", y = "HIV",
                      cor.coef = TRUE, cor.method = "spearman",
                      main= "Percent Hispanic or Latino", xlab = "%", ylab = "HIV cases")
 
+HIVp6 <-   ggscatter(philly_sf_joined, x = "Age", y = "HIV",
+                     add = "reg.line", conf.int = TRUE,
+                     cor.coef = TRUE, cor.method = "pearson",
+                     main= "Median Age", xlab = "Years", ylab = "HIV cases per 100,000")
+
 # HIV correlation plots combined
-HIVpAll <- grid.arrange(HIVp1, HIVp2, HIVp3, HIVp4, HIVp5, nrow = 1)
+HIVpAll <- grid.arrange(HIVp1, HIVp2, HIVp3, HIVp4, HIVp5, HIVp6, nrow = 1)
 
 ## Risk Factors ##
 # income x pop. density
@@ -462,6 +516,10 @@ rf3 <-   ggscatter(philly_sf_joined, x = "Occupation", y = "Density",
 # Risk factors correlation plots combined
 rfAll <- grid.arrange(rf1, rf2, rf3, nrow = 1)
 
+corrAll <- grid.arrange(COVp1, COVp2, COVp3, COVp4, COVp5, COVp6,
+                        HIVp1, HIVp2, HIVp3, HIVp4, HIVp5, HIVp6,
+                        rf1, rf2, rf3, nrow = 5)
+
 
 ### LINEAR MODELS ###
 
@@ -475,24 +533,27 @@ philly_sf_joined$Income_10k <- philly_sf_joined$Income/10000
 # scale density to 10,000
 philly_sf_joined$Density_10 <- philly_sf_joined$Density/10000
 
-## COVID-19 z-score linear regression analysis
-# outcome: COVID-19 z-score
+# scale occupation (proportion to percentage)
+philly_sf_joined$Occupation_100 <- philly_sf_joined$Occupation*100
+
+## COVID-19 cases linear regression analysis
+# outcome: COVID-19 cases per capita
 # covariates: % high-risk occupation, income scaled, pop. density scaled, % Black scaled, % Hispanic scaled
-covid_reg_scale <- lm(COVID_z ~ Occupation + Income_10k + Density_10 + Black_10 + Hispanic_10, data=philly_sf_joined)
+covid_reg_scale <- lm(COVID ~ Occupation_100 + Income_10k + Density_10 + Black + Hispanic + Age, data=philly_sf_joined)
 summary(covid_reg_scale)
 confint(covid_reg_scale)
 
-## HIV z-score linear regression analysis
-# outcome: HIV z-score
-# covariates: income scaled, % male-partner household, number of overdose deaths, % Black scaled, % Hispanic scaled
-HIV_reg_scale <- lm(HIV_z ~ Income_10k + Male_partner_household + factor_Overdoses + Black_10 + Hispanic_10, data=philly_sf_joined)
+## HIV linear regression analysis
+# outcome: HIV incidence
+# covariates: income scaled, % male-partner household, number of overdose deaths, % Black, % Hispanic, age
+HIV_reg_scale <- lm(HIV ~ Income_10k + Male_partner_household + factor_Overdoses + Black + Hispanic + Age, data=philly_sf_joined)
 summary(HIV_reg_scale)
 confint(HIV_reg_scale)
 
-## Differences in z-score linear regression analysis
-# outcome: differences in z-scores
-# covariates: income scaled, % high-risk occupation, pop. density scaled, % male-partner household, number of overdose deaths, % Black scaled, % Hispanic scaled
-diff_reg_scale <- lm(Diff_z ~ Income_10k + Occupation + Density_10 + Male_partner_household + factor_Overdoses + Black_10 + Hispanic_10, data=philly_sf_joined)
+## COVID | HIV linear regression analysis
+# outcome: COVID-19 cases per capita
+# covariates: HIV, % Black
+diff_reg_scale <- lm(COVID ~ HIV + Black, data=philly_sf_joined)
 summary(diff_reg_scale)
 confint(diff_reg_scale)
 
