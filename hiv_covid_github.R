@@ -539,21 +539,21 @@ philly_sf_joined$Occupation_100 <- philly_sf_joined$Occupation*100
 ## COVID-19 cases linear regression analysis
 # outcome: COVID-19 cases per capita
 # covariates: % high-risk occupation, income scaled, pop. density scaled, % Black scaled, % Hispanic scaled
-covid_reg_scale <- lm(COVID ~ Occupation_100 + Income_10k + Density_10 + Black + Hispanic + Age, data=philly_sf_joined)
+covid_reg_scale <- lm(COVID ~ Occupation_100 + Income_10k + Density_10 + Black + Hispanic + Age, data=philly_sf_joined, weights=philly_sf_joined$Population)
 summary(covid_reg_scale)
 confint(covid_reg_scale)
 
 ## HIV linear regression analysis
 # outcome: HIV incidence
 # covariates: income scaled, % male-partner household, number of overdose deaths, % Black, % Hispanic, age
-HIV_reg_scale <- lm(HIV ~ Income_10k + Male_partner_household + factor_Overdoses + Black + Hispanic + Age, data=philly_sf_joined)
+HIV_reg_scale <- lm(HIV ~ Income_10k + Male_partner_household + factor_Overdoses + Black + Hispanic + Age, data=philly_sf_joined, weights=philly_sf_joined$Population)
 summary(HIV_reg_scale)
 confint(HIV_reg_scale)
 
 ## COVID | HIV linear regression analysis
 # outcome: COVID-19 cases per capita
 # covariates: HIV, % Black
-diff_reg_scale <- lm(COVID ~ HIV + Black, data=philly_sf_joined)
+diff_reg_scale <- lm(COVID ~ HIV + Black, data=philly_sf_joined, weights=philly_sf_joined$Population)
 summary(diff_reg_scale)
 confint(diff_reg_scale)
 
